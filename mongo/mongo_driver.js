@@ -11,6 +11,7 @@ var path = Npm.require('path');
 var MongoDB = NpmModuleMongodb;
 var Fiber = Npm.require('fibers');
 var Future = Npm.require(path.join('fibers', 'future'));
+//const f = require('util');
 
 MongoInternals = {};
 MongoTest = {};
@@ -129,38 +130,8 @@ MongoConnection = function (url, options) {
   options = options || {};
   self._observeMultiplexers = {};
   self._onFailoverHook = new Hook;
-
-  var mongoOptions = {db: {safe: true}, server: {}, replSet: {}};
-
-  // Set autoReconnect to true, unless passed on the URL. Why someone
-  // would want to set autoReconnect to false, I'm not really sure, but
-  // keeping this for backwards compatibility for now.
-  if (!(/[\?&]auto_?[rR]econnect=/.test(url))) {
-    mongoOptions.server.auto_reconnect = true;
-  }
-
-  // Disable the native parser by default, unless specifically enabled
-  // in the mongo URL.
-  // - The native driver can cause errors which normally would be
-  //   thrown, caught, and handled into segfaults that take down the
-  //   whole app.
-  // - Binary modules don't yet work when you bundle and move the bundle
-  //   to a different platform (aka deploy)
-  // We should revisit this after binary npm module support lands.
-  if (!(/[\?&]native_?[pP]arser=/.test(url))) {
-    mongoOptions.db.native_parser = false;
-  }
-
-  // XXX maybe we should have a better way of allowing users to configure the
-  // underlying Mongo driver
-  if (_.has(options, 'poolSize')) {
-    // If we just set this for "server", replSet will override it. If we just
-    // set it for replSet, it will be ignored if we're not using a replSet.
-    mongoOptions.server.poolSize = options.poolSize;
-    mongoOptions.replSet.poolSize = options.poolSize;
-  }
-
   self.db = null;
+
   // We keep track of the ReplSet's primary, so that we can trigger hooks when
   // it changes.  The Node driver's joined callback seems to fire way too
   // often, which is why we need to track it ourselves.
@@ -168,11 +139,10 @@ MongoConnection = function (url, options) {
   self._oplogHandle = null;
   self._docFetcher = null;
 
-
   var connectFuture = new Future;
   MongoDB.connect(
     url,
-    mongoOptions,
+    options,
     Meteor.bindEnvironment(
       function (err, db) {
         if (err) {
@@ -180,8 +150,9 @@ MongoConnection = function (url, options) {
         }
 
         // First, figure out what the current primary is, if any.
-        if (db.serverConfig._state.master)
-          self._primary = db.serverConfig._state.master.name;
+        if (db.serverConfig.isMasterDoc) {
+          self._primary = db.serverConfig.isMasterDoc.primary;
+        }
         db.serverConfig.on(
           'joined', Meteor.bindEnvironment(function (kind, doc) {
             if (kind === 'primary') {

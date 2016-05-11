@@ -1,3 +1,4 @@
+const fs = require('fs');
 var Future = Npm.require('fibers/future');
 
 OPLOG_COLLECTION = 'oplog.rs';
@@ -177,8 +178,10 @@ _.extend(OplogHandle.prototype, {
     self._catchingUpFutures.splice(insertAfter, 0, {ts: ts, future: f});
     f.wait();
   },
+
   _startTailing: function () {
     var self = this;
+
     // First, make sure that we're talking to the local database.
     var mongodbUri = Npm.require('mongodb-uri');
     if (mongodbUri.parse(self._oplogUrl).database !== 'local') {
@@ -197,22 +200,16 @@ _.extend(OplogHandle.prototype, {
     //
     // The tail connection will only ever be running a single tail command, so
     // it only needs to make one underlying TCP connection.
-    self._oplogTailConnection = new MongoConnection(
-      self._oplogUrl, {poolSize: 1});
+    self._oplogTailConnection = self._makeOplogConnection(self._oplogUrl);
     // XXX better docs, but: it's to get monotonic results
     // XXX is it safe to say "if there's an in flight query, just use its
     //     results"? I don't think so but should consider that
-    self._oplogLastEntryConnection = new MongoConnection(
-      self._oplogUrl, {poolSize: 1});
+    self._oplogLastEntryConnection = self._makeOplogConnection(self._oplogUrl);
 
-    // Now, make sure that there actually is a repl set here. If not, oplog
+    // Now, make sure that there actually is a replica set here. If not, oplog
     // tailing won't ever find anything!
-    var f = new Future;
-    self._oplogLastEntryConnection.db.admin().command(
-      { ismaster: 1 }, f.resolver());
-    var isMasterDoc = f.wait();
-    if (!(isMasterDoc && isMasterDoc.documents && isMasterDoc.documents[0] &&
-          isMasterDoc.documents[0].setName)) {
+    const isMasterDoc = self._oplogLastEntryConnection.db.serverConfig.isMasterDoc;
+    if (!(isMasterDoc && isMasterDoc.setName)) {
       throw Error("$MONGO_OPLOG_URL must be set to the 'local' database of " +
                   "a Mongo replica set");
     }
@@ -312,6 +309,7 @@ _.extend(OplogHandle.prototype, {
       }
     });
   },
+
   _setLastProcessedTS: function (ts) {
     var self = this;
     self._lastProcessedTS = ts;
@@ -321,5 +319,61 @@ _.extend(OplogHandle.prototype, {
       var sequencer = self._catchingUpFutures.shift();
       sequencer.future.return();
     }
+  },
+
+  _makeOplogConnection: function (oplogUrl) {
+    // Assign the connection URI. It may or may not be overwritten subsequently.
+    let connectionURI = oplogUrl;
+
+    // Initialize the options object.
+    const options = {
+      db: { safe: true },
+      server: { poolSize: 1 },
+      replSet: {}
+    };
+
+    // Process other environment variables.
+    const sslKeyOplog = process.env.MONGO_OPLOG_SSL_KEY_FILE;
+    const sslCertOplog = process.env.MONGO_OPLOG_SSL_CERT_FILE;
+    const sslCA = process.env.MONGO_SSL_CA_FILE;
+    const x509UserOplog = process.env.MONGO_OPLOG_X509_USER;
+    const sslValidate = (process.env.MONGO_SSL_VALIDATE === 'true') ||
+      (process.env.MONGO_SSL_VALIDATE === 'TRUE');
+
+    options.replSet.sslKey = fs.readFileSync(sslKeyOplog);
+    options.replSet.sslCert = fs.readFileSync(sslCertOplog);
+    options.replSet.sslValidate = sslValidate;
+    options.replSet.sslCA = [fs.readFileSync(sslCA)];
+
+    /*
+     * If SSL server certificate validation is required, check that we have the
+     * SSL CA file as well.
+     */
+    if (sslValidate && (! sslCA)) {
+      throw new Error(
+        "MongoDB connection SSL validation required but no SSL CA file " +
+        "specified in MONGO_SSL_CA_FILE"
+      );
+    }
+
+    /*
+     * If we have the MONGO_X509_USER environment variable for the Oplog user,
+     * insert the escaped 'user' string. But first check that we have the SSL
+     * necessities specified as well.
+     */
+    if (x509UserOplog) {
+      if (! (sslKeyOplog && sslCertOplog)) {
+        throw new Error(
+          "MongoDB connection X.509 Authentication requires SSL key and cert files"
+        );
+      }
+      const urlParts = oplogUrl.split('//');
+      connectionURI =
+        urlParts[0] + '//' +
+        encodeURIComponent(x509UserOplog) + '@' +
+        urlParts[1];
+    }
+
+    return new MongoConnection(connectionURI, options);
   }
 });
