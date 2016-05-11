@@ -5,7 +5,7 @@ This repo contains the modifications made to the `mongo` and `npm-mongo` package
 - use of X.509 Authentication over SSL transport for Meteor's Oplog Tailing connection
 - use of Meteor 1.3.x with MongoDB v3.2.6
 
-In addition, to `MONGO_URL`, and `MONGO_OPLOG_URL` the following environmental variables are used.
+In addition, to `MONGO_URL`, and `MONGO_OPLOG_URL` the following environment variables are used.
 - MONGO_SSL_VALIDATE
 - MONGO_SSL_CA_FILE
 - MONGO_SSL_KEY_FILE
