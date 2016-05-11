@@ -11,8 +11,7 @@ In addition, to `MONGO_URL`, and `MONGO_OPLOG_URL` the following environmental v
 - MONGO_SSL_KEY_FILE
 - MONGO_SSL_CERT_FILE
 - MONGO_SSL_CERT_PASS (if you're using a password-protected cert)
-- MONGO_X509_USER=
-- MONGO_OPLOG_URL
+- MONGO_X509_USER
 - MONGO_OPLOG_SSL_KEY_FILE
 - MONGO_OPLOG_SSL_CERT_FILE
 - MONGO_OPLOG_SSL_CERT_PASS (if you're using a password-protected cert)
