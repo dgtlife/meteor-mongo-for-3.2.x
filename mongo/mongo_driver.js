@@ -374,6 +374,22 @@ MongoConnection.prototype._remove = function (collection_name, selector,
   var refresh = function () {
     self._refresh(collection_name, selector);
   };
+  
+  // Convert the 'result' object in the callback to the number of documents
+  // removed.
+  function fixResult(callback) {
+    if (! callback) {
+      return;
+    }
+
+    return (error, result) => {
+      callback(error, result.result.n);
+    };
+  }
+  
+  // Apply the fix to the callback.
+  callback = fixResult(callback);
+  
   callback = bindEnvironmentForWrite(writeCallback(write, refresh, callback));
 
   try {
