@@ -11,7 +11,6 @@ var path = Npm.require('path');
 var MongoDB = NpmModuleMongodb;
 var Fiber = Npm.require('fibers');
 var Future = Npm.require(path.join('fibers', 'future'));
-//const f = require('util');
 
 MongoInternals = {};
 MongoTest = {};
@@ -456,7 +455,6 @@ MongoConnection.prototype._update = function (collection_name, selector, mod,
     throw new Error(
       "Only plain objects may be used as replacement" +
         " documents in MongoDB");
-    return;
   }
 
   if (!options) options = {};
@@ -472,7 +470,7 @@ MongoConnection.prototype._update = function (collection_name, selector, mod,
     // explictly enumerate options that minimongo supports
     if (options.upsert) mongoOpts.upsert = true;
     if (options.multi) mongoOpts.multi = true;
-    // Lets you get a more more full result from MongoDB. Use with caution:
+    // Lets you get a more full result from MongoDB. Use with caution:
     // might not work with C.upsert (as opposed to C.update({upsert:true}) or
     // with simulated upsert.
     if (options.fullResult) mongoOpts.fullResult = true;
@@ -524,20 +522,29 @@ MongoConnection.prototype._update = function (collection_name, selector, mod,
     } else {
       collection.update(
         mongoSelector, mongoMod, mongoOpts,
-        bindEnvironmentForWrite(function (err, result, extra) {
+        bindEnvironmentForWrite(function (err, writeResult) {
           if (! err) {
-            if (result && options._returnObject) {
-              result = { numberAffected: result };
+            /*
+             * Initialize the result for the 'update' case, i.e. the number of
+             * modified documents.
+             */
+            var result = writeResult.result.n;
+            if (writeResult.result && options._returnObject) {
+              // Override the result in the 'upsert' case.
+              result = { numberAffected: writeResult.result.n };
               // If this was an upsert() call, and we ended up
               // inserting a new doc and we know its id, then
               // return that id as well.
-              if (options.upsert && knownId &&
-                  ! extra.updatedExisting)
+              if (options.upsert && knownId) {
                 result.insertedId = knownId;
+              }
             }
+            callback(err, result);
+          } else {
+            callback(err);
           }
-          callback(err, result);
-        }));
+        })
+      );
     }
   } catch (e) {
     write.committed();
