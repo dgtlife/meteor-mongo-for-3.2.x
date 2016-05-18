@@ -588,6 +588,7 @@ Mongo.Collection.prototype.update = function update(selector, modifier, ...optio
 Mongo.Collection.prototype.remove = function remove(selector, callback) {
   selector = Mongo.Collection._rewriteSelector(selector);
 
+  // Convert the 'result' object to the number of documents removed.
   function fixResult(callback) {
     if (! callback) {
       return;
