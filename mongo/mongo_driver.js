@@ -522,16 +522,16 @@ MongoConnection.prototype._update = function (collection_name, selector, mod,
     } else {
       collection.update(
         mongoSelector, mongoMod, mongoOpts,
-        bindEnvironmentForWrite(function (err, writeResult) {
+        bindEnvironmentForWrite(function (err, updateResult) {
           if (! err) {
             /*
-             * Initialize the result for the 'update' case, i.e. the number of
-             * modified documents.
+             * Initialize the 'result' for the 'update' case, i.e. the number of
+             * modified documents per the Meteor API docs.
              */
-            var result = writeResult.result.n;
-            if (writeResult.result && options._returnObject) {
-              // Override the result in the 'upsert' case.
-              result = { numberAffected: writeResult.result.n };
+            var result = updateResult.result.n;
+            if (updateResult.result && options._returnObject) {
+              // Override the 'result' in the 'upsert' case.
+              result = { numberAffected: updateResult.result.n };
               // If this was an upsert() call, and we ended up
               // inserting a new doc and we know its id, then
               // return that id as well.

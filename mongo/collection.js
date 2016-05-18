@@ -588,10 +588,21 @@ Mongo.Collection.prototype.update = function update(selector, modifier, ...optio
 Mongo.Collection.prototype.remove = function remove(selector, callback) {
   selector = Mongo.Collection._rewriteSelector(selector);
 
+  function fixResult(callback) {
+    if (! callback) {
+      return;
+    }
+
+    return (error, result) => {
+      callback(error, result.result.n);
+    };
+  }
+
   const wrappedCallback = wrapCallback(callback);
+  const fixedCallback = fixResult(wrappedCallback);
 
   if (this._isRemoteCollection()) {
-    return this._callMutatorMethod("remove", [selector], wrappedCallback);
+    return this._callMutatorMethod("remove", [selector], fixedCallback);
   }
 
   // it's my collection.  descend into the collection object
@@ -600,7 +611,7 @@ Mongo.Collection.prototype.remove = function remove(selector, callback) {
     // If the user provided a callback and the collection implements this
     // operation asynchronously, then queryRet will be undefined, and the
     // result will be returned through the callback instead.
-    return this._collection.remove(selector, wrappedCallback);
+    return this._collection.remove(selector, fixedCallback).result.n;
   } catch (e) {
     if (callback) {
       callback(e);
